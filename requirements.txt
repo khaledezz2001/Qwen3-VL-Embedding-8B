@@ -6,6 +6,5 @@ sentencepiece==0.1.99
 runpod==1.6.2
 pillow==10.2.0
 sacremoses==0.1.1
-flash-attn==2.6.3
 sentence-transformers>=3.0.0
 qwen-vl-utils
