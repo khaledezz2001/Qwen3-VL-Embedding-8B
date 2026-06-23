@@ -1,0 +1,11 @@
+torch==2.4.0
+transformers>=4.48.0
+huggingface_hub==0.20.3
+accelerate>=0.26.1
+sentencepiece==0.1.99
+runpod==1.6.2
+pillow==10.2.0
+sacremoses==0.1.1
+flash-attn==2.6.3
+sentence-transformers>=3.0.0
+qwen-vl-utils
