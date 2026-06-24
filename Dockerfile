@@ -8,12 +8,12 @@ RUN apt-get update && apt-get install -y git && rm -rf /var/lib/apt/lists/*
 COPY requirements.txt /requirements.txt
 RUN pip install --no-cache-dir -r /requirements.txt
 
-# Download Qwen3-VL-Embedding-8B
+# Download Qwen3-8B-Instruct
 RUN python3 - <<EOF
 from huggingface_hub import snapshot_download
 snapshot_download(
-    repo_id="Qwen/Qwen3-VL-Embedding-8B",
-    local_dir="/models/hf/qwen3-vl-embedding-8b",
+    repo_id="Qwen/Qwen3-8B-Instruct",
+    local_dir="/models/hf/qwen3-8b-instruct",
     local_dir_use_symlinks=False
 )
 EOF
