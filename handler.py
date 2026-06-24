@@ -13,26 +13,26 @@ def log(msg):
 # =====================================================
 # Model configuration
 # =====================================================
-MODEL_PATH = "/models/hf/qwen3-8b-instruct"
+MODEL_PATH = "/models/hf/qwen3-8b"
 model = None
 tokenizer = None
 
 # =====================================================
-# Load Qwen3-8B-Instruct Model and Tokenizer
+# Load Qwen3-8B Model and Tokenizer
 # =====================================================
 def load_model():
     global model, tokenizer
     if model is not None and tokenizer is not None:
         return
 
-    log(f"Loading Qwen3-8B-Instruct from {MODEL_PATH}")
+    log(f"Loading Qwen3-8B from {MODEL_PATH}")
     
     device = "cuda" if torch.cuda.is_available() else "cpu"
     
     # Check if local path exists; if not, fallback to HF Hub identifier for testing
     if not os.path.exists(MODEL_PATH):
-        log(f"WARNING: Model path {MODEL_PATH} not found. Falling back to Hugging Face Hub (Qwen/Qwen3-8B-Instruct)")
-        model_name_or_path = "Qwen/Qwen3-8B-Instruct"
+        log(f"WARNING: Model path {MODEL_PATH} not found. Falling back to Hugging Face Hub (Qwen/Qwen3-8B)")
+        model_name_or_path = "Qwen/Qwen3-8B"
     else:
         model_name_or_path = MODEL_PATH
 
