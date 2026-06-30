@@ -1,8 +1,7 @@
 import time
 import os
-import torch
 import runpod
-from transformers import AutoModelForCausalLM, AutoTokenizer
+from vllm import LLM, SamplingParams
 
 # =====================================================
 # Logging helper
@@ -14,20 +13,17 @@ def log(msg):
 # Model configuration
 # =====================================================
 MODEL_PATH = "/models/hf/qwen3-8b"
-model = None
-tokenizer = None
+llm = None
 
 # =====================================================
-# Load Qwen3-8B Model and Tokenizer
+# Load Qwen3-8B Model
 # =====================================================
 def load_model():
-    global model, tokenizer
-    if model is not None and tokenizer is not None:
+    global llm
+    if llm is not None:
         return
 
-    log(f"Loading Qwen3-8B from {MODEL_PATH}")
-    
-    device = "cuda" if torch.cuda.is_available() else "cpu"
+    log(f"Loading Qwen3-8B from {MODEL_PATH} via vLLM")
     
     # Check if local path exists; if not, fallback to HF Hub identifier for testing
     if not os.path.exists(MODEL_PATH):
@@ -36,59 +32,19 @@ def load_model():
     else:
         model_name_or_path = MODEL_PATH
 
-    # Initialize Tokenizer and Model
-    tokenizer = AutoTokenizer.from_pretrained(model_name_or_path, trust_remote_code=True)
-    
-    model = AutoModelForCausalLM.from_pretrained(
-        model_name_or_path,
+    # Initialize vLLM engine
+    llm = LLM(
+        model=model_name_or_path,
         trust_remote_code=True,
-        torch_dtype="auto" if torch.cuda.is_available() else torch.float32,
-        device_map="auto" if torch.cuda.is_available() else None
     )
-    
-    # Enable CUDA optimizations if available
-    if torch.cuda.is_available():
-        torch.backends.cuda.matmul.allow_tf32 = True
-        torch.backends.cudnn.allow_tf32 = True
-        torch.backends.cudnn.benchmark = True
         
-    log(f"Model and tokenizer successfully loaded on device: {device}")
-
-# =====================================================
-# Text generation helper
-# =====================================================
-def generate_response(system_prompt, user_prompt, gen_kwargs):
-    messages = []
-    if system_prompt:
-        messages.append({"role": "system", "content": system_prompt})
-    messages.append({"role": "user", "content": user_prompt})
-    
-    text = tokenizer.apply_chat_template(
-        messages,
-        tokenize=False,
-        add_generation_prompt=True
-    )
-    
-    model_inputs = tokenizer([text], return_tensors="pt").to(model.device)
-    
-    with torch.no_grad():
-        generated_ids = model.generate(
-            **model_inputs,
-            **gen_kwargs
-        )
-    
-    input_len = model_inputs.input_ids.shape[1]
-    output_ids = generated_ids[0][input_len:]
-    return tokenizer.decode(output_ids, skip_special_tokens=True)
+    log(f"Model successfully loaded via vLLM")
 
 # =====================================================
 # RunPod handler
 # =====================================================
 def handler(event):
     log("Handler started")
-    log(f"CUDA available: {torch.cuda.is_available()}")
-    if torch.cuda.is_available():
-        log(f"CUDA device: {torch.cuda.get_device_name(0)}")
 
     input_data = event["input"]
     
@@ -105,26 +61,38 @@ def handler(event):
     # Ensure model is loaded
     load_model()
 
-    # Determine generation parameters
-    gen_kwargs = {
-        "max_new_tokens": max_new_tokens,
-    }
-    if temperature and temperature > 0.0:
-        gen_kwargs["do_sample"] = True
-        gen_kwargs["temperature"] = temperature
-        if top_p:
-            gen_kwargs["top_p"] = top_p
-    else:
-        gen_kwargs["do_sample"] = False
+    # Determine generation parameters for vLLM
+    sampling_params = SamplingParams(
+        temperature=temperature if temperature and temperature > 0.0 else 0.0,
+        top_p=top_p if top_p else 1.0,
+        max_tokens=max_new_tokens
+    )
 
     log("Starting text generation...")
     start_time = time.time()
     
-    if isinstance(user_prompt, list):
-        responses = [generate_response(system_prompt, q, gen_kwargs) for q in user_prompt]
-        response_data = responses
+    tokenizer = llm.get_tokenizer()
+    
+    is_list = isinstance(user_prompt, list)
+    prompts_to_process = user_prompt if is_list else [user_prompt]
+    
+    formatted_prompts = []
+    for q in prompts_to_process:
+        messages = []
+        if system_prompt:
+            messages.append({"role": "system", "content": system_prompt})
+        messages.append({"role": "user", "content": q})
+        formatted_prompts.append(
+            tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
+        )
+
+    # Generate using vLLM
+    outputs = llm.generate(formatted_prompts, sampling_params=sampling_params, use_tqdm=False)
+    
+    if is_list:
+        response_data = [out.outputs[0].text for out in outputs]
     else:
-        response_data = generate_response(system_prompt, user_prompt, gen_kwargs)
+        response_data = outputs[0].outputs[0].text
         
     log(f"Text generation completed in {time.time() - start_time:.4f}s")
     
