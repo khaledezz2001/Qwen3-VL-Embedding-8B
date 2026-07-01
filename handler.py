@@ -56,7 +56,11 @@ def handler(event):
     max_new_tokens = input_data.get("max_new_tokens", 1024)
     
     if not user_prompt:
+        log("Error: user_prompt is required")
         return {"error": "user_prompt is required"}
+
+    log(f"Incoming Request - System Prompt: {system_prompt}")
+    log(f"Incoming Request - User Prompt: {user_prompt}")
 
     # Ensure model is loaded
     load_model()
@@ -90,11 +94,24 @@ def handler(event):
     outputs = llm.generate(formatted_prompts, sampling_params=sampling_params, use_tqdm=False)
     
     if is_list:
-        response_data = [out.outputs[0].text for out in outputs]
+        response_data = []
+        for idx, out in enumerate(outputs):
+            text = out.outputs[0].text
+            response_data.append(text)
+            prompt_tokens = len(out.prompt_token_ids)
+            completion_tokens = len(out.outputs[0].token_ids)
+            finish_reason = out.outputs[0].finish_reason
+            log(f"vLLM State (Req {idx}) - Prompt Tokens: {prompt_tokens}, Completion Tokens: {completion_tokens}, Finish Reason: {finish_reason}")
     else:
-        response_data = outputs[0].outputs[0].text
+        out = outputs[0]
+        response_data = out.outputs[0].text
+        prompt_tokens = len(out.prompt_token_ids)
+        completion_tokens = len(out.outputs[0].token_ids)
+        finish_reason = out.outputs[0].finish_reason
+        log(f"vLLM State - Prompt Tokens: {prompt_tokens}, Completion Tokens: {completion_tokens}, Finish Reason: {finish_reason}")
         
     log(f"Text generation completed in {time.time() - start_time:.4f}s")
+    log(f"Generated Response: {response_data}")
     
     return {
         "response": response_data
